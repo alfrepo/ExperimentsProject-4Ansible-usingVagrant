@@ -58,6 +58,11 @@ Vagrant.configure("2") do |config|
 			echo -e "\n[local]\n127.0.0.1   ansible_connection=local\n\n" | sudo tee --append /etc/ansible/hosts
 			# add the slave so that we can reach it via ansible as "slave"
 			echo -e "\n[slave]\n10.0.0.11\n\n" | sudo tee --append /etc/ansible/hosts
+
+
+			# allow making tmp files of ansible - readable to non priviledged users. Allows becoming non priviledged user
+			#sed -i 's/.*pipelining.*/pipelining = True/' /etc/ansible/ansible.cfg
+			#sed -i 's/.*allow_world_readable_tmpfiles.*/allow_world_readable_tmpfiles = True/' /etc/ansible/ansible.cfg
 			
 			# configure the ssh key permissions to 700. Otherwise ansible will decline the usage of the key
 			chmod -R 700 /home/vagrant/.ssh
