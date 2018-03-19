@@ -12,12 +12,8 @@ Vagrant.configure("2") do |config|
 
 	# Every Vagrant development environment requires a box. You can search for
 	# boxes at https://vagrantcloud.com/search.
-	config.vm.box = "boxcutter/ubuntu1604"
-
-	# The url from where the 'config.vm.box' box will be fetched if it
-	# doesn't already exist on the user's system.
-	config.vm.box_url = "https://app.vagrantup.com/boxcutter/boxes/ubuntu1604"
-
+	config.vm.box = "box-cutter/ubuntu1604"
+	
 
 
 	# CUSTOMISATION OF THE VM HERE
@@ -26,18 +22,11 @@ Vagrant.configure("2") do |config|
 
 	# use my own ssh key, dont generate own keys
 	config.ssh.insert_key = false
-	config.ssh.private_key_path = ["#{PATH_VAGRANT_PROJECT}\\ssh\\myexperimental.openssh.ppk", "~/.vagrant.d/insecure_private_key"]
-	
-	# here the private key is stored with its original name, just for the case
-	config.vm.provision "file", source: "#{PATH_VAGRANT_PROJECT}\\ssh\\myexperimental.openssh.ppk", destination: "~/myexperimental.openssh.ppk"
-	
-	# here ansible will look for the private key, when connection form master to the slave
-	config.vm.provision "file", source: "#{PATH_VAGRANT_PROJECT}\\ssh\\myexperimental.openssh.ppk", destination: "/home/vagrant/.ssh/id_rsa"
-	
-	# here we store the public key, so that it is authorized when connecting via ssh
-	config.vm.provision "file", source: "#{PATH_VAGRANT_PROJECT}\\ssh\\myexperimental.openssh.public", destination: "~/.ssh/authorized_keys"
 
 	BOX_IMAGE = "boxcutter/ubuntu1604"
+
+	# all files here will be added to home
+	config.vm.synced_folder "#{PATH_VAGRANT_PROJECT}\\vagrant-home\\", "//root/vagrant-home/"
   
 	# you can ssh via "vagrant ssh master"
 	config.vm.define "master" do |subconfig|
@@ -46,25 +35,36 @@ Vagrant.configure("2") do |config|
 		subconfig.vm.network :private_network, ip: "10.0.0.10"
 		
 		subconfig.vm.provision "shell", inline: <<-SHELL
+
+			###### bulk import the ssh keys dynamically by extension
+			cd '/root/vagrant-home/ssh/'
+
+			# add private keys *.openssh.ppk to the .ssh
+			for i in *.openssh.ppk; do
+				[ -f "$i" ] || break
+				cp "$i" "/home/vagrant/.ssh/"
+			done
+			
 			sudo apt-get update
 			sudo apt-get -y install software-properties-common
 			sudo apt-add-repository -y ppa:ansible/ansible
 			sudo apt-get -y update
 			sudo apt-get -y install ansible
 			
+			
 			# configure ansible hosts. Store away the original example hosts file.
 			mv /etc/ansible/hosts /etc/ansible/hosts.original
+			
 			# add the localhost so that we can reach it via ansible as "local"
-			echo -e "\n[local]\n127.0.0.1   ansible_connection=local\n\n" | sudo tee --append /etc/ansible/hosts
+			echo -e "\nlocal ansible_host=127.0.0.1   ansible_connection=local \n" | sudo tee --append /etc/ansible/hosts
+			
 			# add the slave so that we can reach it via ansible as "slave"
-			echo -e "\n[slave]\n10.0.0.11\n\n" | sudo tee --append /etc/ansible/hosts
-
-
-			# allow making tmp files of ansible - readable to non priviledged users. Allows becoming non priviledged user
-			#sed -i 's/.*pipelining.*/pipelining = True/' /etc/ansible/ansible.cfg
-			#sed -i 's/.*allow_world_readable_tmpfiles.*/allow_world_readable_tmpfiles = True/' /etc/ansible/ansible.cfg
+			echo -e "\nslave ansible_host=10.0.0.11 ansible_user=vagrant ansible_ssh_private_key_file=/home/vagrant/.ssh/key.myexperimental.openssh.ppk\n" | sudo tee --append /etc/ansible/hosts
+			
+			echo -e "\nnetflix ansible_host=52.44.166.127 ansible_user=openvpnas ansible_ssh_private_key_file=/home/vagrant/.ssh/ssh-virginia.openssh.ppk\n" | sudo tee --append /etc/ansible/hosts
 			
 			# configure the ssh key permissions to 700. Otherwise ansible will decline the usage of the key
+			chown -R vagrant:vagrant /home/vagrant/.ssh
 			chmod -R 700 /home/vagrant/.ssh
 			
 		SHELL
@@ -82,6 +82,14 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", inline: <<-SHELL
     
 	# do here the provisioning for all nodes
+
+	# add public keys as *.openssh.public to authorized keys
+	cd '/root/vagrant-home/ssh/'
+	for i in *.openssh.public; do
+		[ -f "$i" ] || break
+		echo -e "\n" >> "/home/vagrant/.ssh/authorized_keys"
+		cat "$i" 	 >> "/home/vagrant/.ssh/authorized_keys"
+	done
 	
   SHELL
   
