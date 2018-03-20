@@ -1,0 +1,29 @@
+---
+- name: Install nginx
+  hosts: "{{ host }}"
+  become: true
+  tasks:
+  
+  - name: Slurp hosts file
+    slurp:
+        src: /etc/hostname
+    register: slurpfile
+  
+  - name: Install nginx
+    apt:
+      name: nginx
+      state: present
+
+  - name: Insert Index Page      
+    copy:
+        content: |
+            <html>
+                <head>Hello bunny!</head>
+                <body>Jazz jack rabbit or rabbot! On {{ slurpfile['content'] | b64decode }}</body>
+            </html>
+        dest: /var/www/html/index.nginx-debian.html
+
+  - name: Start NGiNX
+    service:
+      name: nginx
+      state: started
